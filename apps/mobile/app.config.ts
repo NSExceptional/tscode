@@ -213,9 +213,35 @@ const sharingPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
   },
 ];
 
-// These aliases match the fonts' PostScript names on iOS. Register the same
-// names on Android so React Native and the native composer use one set of
-// family names without waiting for runtime font loading.
+// Alternate app icons for the in-app picker. blue-dark is the primary icon
+// (set via ios.icon), so it is NOT listed here; the other 11 are registered as
+// switchable alternates. Keep these keys in sync with src/lib/appIcons.ts.
+const ALTERNATE_APP_ICON_KEYS = [
+  "blue",
+  "purple",
+  "rainbow",
+  "red",
+  "teal",
+  "yellow",
+  "purple_dark",
+  "rainbow_dark",
+  "red_dark",
+  "teal_dark",
+  "yellow_dark",
+] as const;
+
+const dynamicAppIconPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
+  "expo-dynamic-app-icon",
+  Object.fromEntries(
+    ALTERNATE_APP_ICON_KEYS.map((key) => [
+      key,
+      {
+        image: `./assets/app-icons/AppIcon-${key.replace(/_/g, "-")}.png`,
+        prerendered: true,
+      },
+    ]),
+  ),
+];
 
 const config: ExpoConfig = {
   name: variant.appName,
@@ -313,6 +339,7 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-asset",
+    dynamicAppIconPlugin,
     "expo-secure-store",
     "expo-sqlite",
     ...(isIosPersonalTeamBuild
