@@ -18,8 +18,10 @@ interface AlternateIconNativeModule {
 
 const nativeModule = requireOptionalNativeModule<AlternateIconNativeModule>("T3NativeControls");
 
+// Don't call into UIKit at module-load; just confirm the module + function
+// exist. The device capability is re-checked inside the native setter.
 export const appIconsSupported =
-  Platform.OS === "ios" && nativeModule?.supportsAlternateIcons?.() === true;
+  Platform.OS === "ios" && typeof nativeModule?.setAppIcon === "function";
 
 /** The currently-applied icon key, or null when the primary icon is active. */
 export function getCurrentAppIconKey(): string | null {

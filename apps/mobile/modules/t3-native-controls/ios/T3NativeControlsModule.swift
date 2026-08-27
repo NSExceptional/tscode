@@ -157,22 +157,23 @@ public final class T3NativeControlsModule: Module {
 
     Function("setAppIcon") { (name: String) -> String in
       let iconName: String? = name == "DEFAULT" ? nil : name
-      guard UIApplication.shared.supportsAlternateIcons else {
-        return "DEFAULT"
-      }
-      let selector = NSSelectorFromString("_setAlternateIconName:completionHandler:")
-      if UIApplication.shared.responds(to: selector) {
-        typealias SetIcon = @convention(c) (
-          NSObject, Selector, NSString?, @escaping (NSError?) -> Void
-        ) -> Void
-        let implementation = UIApplication.shared.method(for: selector)
-        let setIcon = unsafeBitCast(implementation, to: SetIcon.self)
-        setIcon(UIApplication.shared, selector, iconName as NSString?, { _ in })
-      } else {
-        UIApplication.shared.setAlternateIconName(iconName, completionHandler: nil)
+      // UIKit must be touched on the main thread; the switch is fire-and-forget.
+      DispatchQueue.main.async {
+        guard UIApplication.shared.supportsAlternateIcons else { return }
+        let selector = NSSelectorFromString("_setAlternateIconName:completionHandler:")
+        if UIApplication.shared.responds(to: selector) {
+          typealias SetIcon = @convention(c) (
+            NSObject, Selector, NSString?, @escaping (NSError?) -> Void
+          ) -> Void
+          let implementation = UIApplication.shared.method(for: selector)
+          let setIcon = unsafeBitCast(implementation, to: SetIcon.self)
+          setIcon(UIApplication.shared, selector, iconName as NSString?, { _ in })
+        } else {
+          UIApplication.shared.setAlternateIconName(iconName, completionHandler: nil)
+        }
       }
       return name
-    }.runOnQueue(.main)
+    }
   }
 
   // The geometry request above can fail transiently (for example before the
