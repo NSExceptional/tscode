@@ -142,6 +142,37 @@ public final class T3NativeControlsModule: Module {
         window.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
       }
     }
+
+    // ── Alternate app icons ──────────────────────────────────────────────
+    // Switch among the CFBundleAlternateIcons registered in Info.plist. "DEFAULT"
+    // restores the primary icon. Uses the private setter so no system alert shows.
+
+    Function("supportsAlternateIcons") { () -> Bool in
+      return UIApplication.shared.supportsAlternateIcons
+    }
+
+    Function("getAppIcon") { () -> String in
+      return UIApplication.shared.alternateIconName ?? "DEFAULT"
+    }
+
+    Function("setAppIcon") { (name: String) -> String in
+      let iconName: String? = name == "DEFAULT" ? nil : name
+      guard UIApplication.shared.supportsAlternateIcons else {
+        return "DEFAULT"
+      }
+      let selector = NSSelectorFromString("_setAlternateIconName:completionHandler:")
+      if UIApplication.shared.responds(to: selector) {
+        typealias SetIcon = @convention(c) (
+          NSObject, Selector, NSString?, @escaping (NSError?) -> Void
+        ) -> Void
+        let implementation = UIApplication.shared.method(for: selector)
+        let setIcon = unsafeBitCast(implementation, to: SetIcon.self)
+        setIcon(UIApplication.shared, selector, iconName as NSString?, { _ in })
+      } else {
+        UIApplication.shared.setAlternateIconName(iconName, completionHandler: nil)
+      }
+      return name
+    }.runOnQueue(.main)
   }
 
   // The geometry request above can fail transiently (for example before the

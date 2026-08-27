@@ -173,6 +173,9 @@
         "react-native-reanimated",
         "@react-native-menu/menu",
         "expo-audio"
+      ],
+      "exclude": [
+        "expo-dynamic-app-icon"
       ]
     }
   },

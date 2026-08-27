@@ -1,22 +1,44 @@
 import { Platform } from "react-native";
-import { getAppIcon, setAppIcon } from "expo-dynamic-app-icon";
+import { requireOptionalNativeModule } from "expo";
 
 /**
- * Thin wrapper over expo-dynamic-app-icon that speaks in our catalog's terms:
- * a `null` key means the primary/default icon (the library's "DEFAULT").
+ * Alternate app-icon switching, routed through our own T3NativeControls module
+ * (which reliably links) rather than a third-party native module. The alternate
+ * icons themselves are registered in Info.plist by the expo-dynamic-app-icon
+ * config plugin at prebuild; here we only flip between them at runtime.
+ *
+ * requireOptionalNativeModule returns null instead of throwing when the module
+ * is unavailable, so this never crashes the app at import.
  */
+interface AlternateIconNativeModule {
+  readonly supportsAlternateIcons: () => boolean;
+  readonly getAppIcon: () => string;
+  readonly setAppIcon: (name: string) => string;
+}
 
-export const appIconsSupported = Platform.OS === "ios" || Platform.OS === "android";
+const nativeModule = requireOptionalNativeModule<AlternateIconNativeModule>("T3NativeControls");
+
+export const appIconsSupported =
+  Platform.OS === "ios" && nativeModule?.supportsAlternateIcons?.() === true;
 
 /** The currently-applied icon key, or null when the primary icon is active. */
 export function getCurrentAppIconKey(): string | null {
-  if (!appIconsSupported) return null;
-  const current = getAppIcon();
-  return !current || current === "DEFAULT" ? null : current;
+  if (!appIconsSupported || !nativeModule) return null;
+  try {
+    const current = nativeModule.getAppIcon();
+    return !current || current === "DEFAULT" ? null : current;
+  } catch {
+    return null;
+  }
 }
 
 /** Apply an icon by key (null → primary/default). Returns whether it succeeded. */
 export function applyAppIcon(key: string | null): boolean {
-  if (!appIconsSupported) return false;
-  return setAppIcon(key ?? "DEFAULT") !== false;
+  if (!appIconsSupported || !nativeModule) return false;
+  try {
+    nativeModule.setAppIcon(key ?? "DEFAULT");
+    return true;
+  } catch {
+    return false;
+  }
 }
