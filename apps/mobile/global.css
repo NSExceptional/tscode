@@ -13,10 +13,10 @@
 
 /* ─── Typography ────────────────────────────────────────────────────── */
 @theme {
-  /* Keep these native family names aligned with app.config.ts. */
-  --font-sans: "DMSans-Regular";
-  --font-medium: "DMSans-Medium";
-  --font-bold: "DMSans-Bold";
+  /* "System" is the plain roman face; weights come from the utilities below. */
+  --font-sans: "System";
+  --font-medium: "System";
+  --font-bold: "System";
 
   /* Keep this scale aligned with src/lib/typography.ts for native style props. */
   --text-3xs: 11px;
@@ -42,10 +42,12 @@
 /* ─── Custom utilities ──────────────────────────────────────────────── */
 @utility font-t3-medium {
   font-family: var(--font-medium);
+  font-weight: 500;
 }
 
 @utility font-t3-bold {
   font-family: var(--font-bold);
+  font-weight: 700;
 }
 
 @utility font-t3-extrabold {
