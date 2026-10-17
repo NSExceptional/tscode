@@ -234,9 +234,9 @@ const layerOrchestratorProvided = Orchestrator.layer.pipe(
 );
 
 const layerAgentSessionImporterProvided = AgentSessionImporter.layer.pipe(
+  Layer.provideMerge(AgentSessionScanner.layer),
   Layer.provide(
     Layer.mergeAll(
-      AgentSessionScanner.layer,
       layerProjectService,
       layerOrchestratorProvided,
       layerEventSinkProvided,

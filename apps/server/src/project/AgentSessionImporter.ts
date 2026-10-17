@@ -174,6 +174,11 @@ const make = Effect.gen(function* () {
   const runtimes = yield* ProviderSessionRuntime.ProviderSessionRuntimeRepository;
   const importRecentAgentThreads = Effect.fn("importRecentAgentThreadsV2")(function* (
     input: AgentSessionImportInput,
+    options?: {
+      readonly sources?: ReadonlyArray<AgentSessionSource>;
+      /** Native session ids that already back a provider thread, such as ones T3 started. */
+      readonly excludeProviderSessionIds?: ReadonlySet<string>;
+    },
   ) {
     const project = yield* projects.getById(input.projectId).pipe(
       Effect.mapError((cause) => new AgentSessionScanError({ operation: "read-projects", cause })),
@@ -211,7 +216,11 @@ const make = Effect.gen(function* () {
       }
       return payload.value.importedTranscripts ?? [];
     });
-    const outcomes = scanner.recentThreads(project.workspaceRoot, completedSources);
+    const outcomes = scanner.recentThreads(
+      project.workspaceRoot,
+      completedSources,
+      options?.sources,
+    );
     const importedThreadIds = new Set<ThreadId>();
     let importedCount = 0;
     let skippedCount = 0;
@@ -222,6 +231,7 @@ const make = Effect.gen(function* () {
           skippedCount += 1;
           return;
         }
+        if (options?.excludeProviderSessionIds?.has(outcome.source.providerSessionId)) return;
         const source = outcome.source;
         const threadId = ThreadId.make(
           `import:${source.providerInstanceId}:${source.providerSessionId}`,

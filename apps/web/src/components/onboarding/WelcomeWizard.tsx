@@ -2,6 +2,7 @@ import { useAuth } from "@clerk/react";
 import { useAtomValue } from "@effect/atom-react";
 import type {
   AgentSessionProjectCandidate,
+  AgentSessionSource,
   EnvironmentId,
   ProjectId,
   ProviderInstanceId,
@@ -1715,14 +1716,14 @@ function ImportRowMeta({
   threadCount,
   lastActiveAt,
 }: {
-  readonly sources: ReadonlyArray<"claudeAgent" | "codex"> | null;
+  readonly sources: ReadonlyArray<AgentSessionSource> | null;
   readonly threadCount: number;
   readonly lastActiveAt: string | null;
 }) {
   const relative = lastActiveAt === null ? null : formatRelativeTime(lastActiveAt);
   const age = relative === null ? "" : relative.suffix === null ? "now" : relative.value;
   return (
-    <span className="ml-auto grid shrink-0 grid-cols-[1rem_1rem_2.5rem_2.25rem] items-center gap-x-1 text-xs text-muted-foreground tabular-nums">
+    <span className="ml-auto grid shrink-0 grid-cols-[1rem_1rem_1rem_2.5rem_2.25rem] items-center gap-x-1 text-xs text-muted-foreground tabular-nums">
       <span className="flex size-4 items-center justify-center">
         {sources?.includes("claudeAgent") ? (
           <span role="img" aria-label="Claude Code">
@@ -1740,6 +1741,17 @@ function ImportRowMeta({
             <ProviderInstanceIcon
               driverKind={ProviderDriverKind.make("codex")}
               displayName="Codex"
+              iconClassName="size-3"
+            />
+          </span>
+        ) : null}
+      </span>
+      <span className="flex size-4 items-center justify-center">
+        {sources?.includes("copilot") ? (
+          <span role="img" aria-label="GitHub Copilot">
+            <ProviderInstanceIcon
+              driverKind={ProviderDriverKind.make("copilot")}
+              displayName="GitHub Copilot"
               iconClassName="size-3"
             />
           </span>

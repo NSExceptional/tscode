@@ -30,6 +30,7 @@ it.effect("imports messages once and preserves the provider native resume bindin
   let imported = false;
   const scanner = AgentSessionScanner.AgentSessionScanner.of({
     scan: Effect.die("unused"),
+    refresh: () => Effect.die("unused"),
     recentThreads: () =>
       Stream.succeed({
         _tag: "Importable",
@@ -97,6 +98,14 @@ it.effect("imports messages once and preserves the provider native resume bindin
 
   return Effect.gen(function* () {
     const importer = yield* AgentSessionImporter.AgentSessionImporter;
+    expect(
+      yield* importer.importRecentAgentThreads(
+        { projectId },
+        { excludeProviderSessionIds: new Set([providerSessionId]) },
+      ),
+    ).toEqual({ importedCount: 0, skippedCount: 0 });
+    expect(writes).toHaveLength(0);
+
     expect(yield* importer.importRecentAgentThreads({ projectId })).toEqual({
       importedCount: 1,
       skippedCount: 0,

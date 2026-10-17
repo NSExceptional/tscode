@@ -1465,6 +1465,162 @@ it.layer(NodeServices.layer)("AgentSessionScanner", (it) => {
       }),
     );
 
+    it.effect("imports Copilot CLI sessions without sub-agent or task-tool replies", () =>
+      Effect.gen(function* () {
+        const path = yield* Path.Path;
+        const nowMs = Date.parse("2026-08-24T12:00:00.000Z");
+        yield* TestClock.setTime(nowMs);
+        const claudeHomePath = yield* makeTempDir("t3code-copilot-claude-");
+        const codexHomePath = yield* makeTempDir("t3code-copilot-codex-");
+        const copilotHomePath = yield* makeTempDir("t3code-copilot-home-");
+        const workspace = yield* makeTempDir("t3code-copilot-workspace-");
+        yield* writeTranscript({
+          filePath: path.join(copilotHomePath, "session-state", "copilot-session", "events.jsonl"),
+          contents: [
+            encodeTranscriptRecord({
+              type: "session.start",
+              timestamp: "2026-08-24T10:00:00.000Z",
+              data: { sessionId: "copilot-session", context: { cwd: workspace } },
+            }),
+            encodeTranscriptRecord({
+              type: "session.model_change",
+              data: { newModel: "claude-sonnet-5" },
+            }),
+            encodeTranscriptRecord({
+              type: "user.message",
+              timestamp: "2026-08-24T10:00:01.000Z",
+              data: { content: "Add a test" },
+            }),
+            encodeTranscriptRecord({
+              type: "assistant.message",
+              timestamp: "2026-08-24T10:00:02.000Z",
+              data: { content: "Exploring", parentToolCallId: "task-1" },
+            }),
+            encodeTranscriptRecord({
+              type: "assistant.message",
+              agentId: "explore",
+              data: { content: "Sub-agent notes" },
+            }),
+            encodeTranscriptRecord({
+              type: "assistant.message",
+              timestamp: "2026-08-24T10:00:03.000Z",
+              data: { content: "Added it" },
+            }),
+            encodeTranscriptRecord({
+              type: "session.title_changed",
+              data: { title: "Add a test" },
+            }),
+          ].join("\n"),
+          mtimeMs: nowMs - 60 * 60 * 1000,
+        });
+
+        const threads = yield* runRecentThreads({
+          claudeHomePath,
+          codexHomePath,
+          workspaceRoot: workspace,
+          providerInstances: {
+            [ProviderInstanceId.make("copilot")]: {
+              driver: ProviderDriverKind.make("copilot"),
+              enabled: true,
+              environment: [{ name: "COPILOT_HOME", value: copilotHomePath, sensitive: false }],
+            },
+          },
+        });
+
+        expect(threads).toHaveLength(1);
+        expect(threads[0]).toMatchObject({
+          source: "copilot",
+          providerSessionId: "copilot-session",
+          title: "Add a test",
+          model: "claude-sonnet-5",
+        });
+        expect(threads[0]?.messages.map((message) => message.text)).toEqual([
+          "Add a test",
+          "Added it",
+        ]);
+      }),
+    );
+
+    it.effect("refreshes only the requested sources for recent threads", () =>
+      Effect.gen(function* () {
+        const path = yield* Path.Path;
+        const nowMs = Date.parse("2026-08-24T12:00:00.000Z");
+        yield* TestClock.setTime(nowMs);
+        const claudeHomePath = yield* makeTempDir("t3code-refresh-claude-");
+        const codexHomePath = yield* makeTempDir("t3code-refresh-codex-");
+        const copilotHomePath = yield* makeTempDir("t3code-refresh-copilot-");
+        const workspace = yield* makeTempDir("t3code-refresh-workspace-");
+        const writeCopilotSession = (sessionId: string) =>
+          writeTranscript({
+            filePath: path.join(copilotHomePath, "session-state", sessionId, "events.jsonl"),
+            contents: [
+              encodeTranscriptRecord({
+                type: "session.start",
+                timestamp: "2026-08-24T10:00:00.000Z",
+                data: { sessionId, context: { cwd: workspace } },
+              }),
+              encodeTranscriptRecord({
+                type: "user.message",
+                timestamp: "2026-08-24T10:00:01.000Z",
+                data: { content: `Prompt ${sessionId}` },
+              }),
+            ].join("\n"),
+            mtimeMs: nowMs - 60 * 60 * 1000,
+          });
+        yield* writeTranscript({
+          filePath: path.join(claudeHomePath, "projects", "-refresh", "claude-session.jsonl"),
+          contents: [
+            encodeTranscriptRecord({
+              type: "user",
+              cwd: workspace,
+              sessionId: "11111111-1111-4111-8111-111111111111",
+              timestamp: "2026-08-24T10:00:00.000Z",
+              message: { role: "user", content: "Claude prompt" },
+            }),
+          ].join("\n"),
+          mtimeMs: nowMs - 60 * 60 * 1000,
+        });
+        yield* writeCopilotSession("copilot-a");
+
+        const copilotSessionIds = Effect.gen(function* () {
+          const scanner = yield* AgentSessionScanner.AgentSessionScanner;
+          const outcomes = yield* scanner
+            .recentThreads(workspace, [], ["copilot"])
+            .pipe(Stream.runCollect);
+          return Array.from(outcomes, (outcome) =>
+            outcome._tag === "Importable"
+              ? `${outcome.thread.source}:${outcome.thread.providerSessionId}`
+              : outcome._tag,
+          ).toSorted();
+        });
+
+        yield* Effect.gen(function* () {
+          const scanner = yield* AgentSessionScanner.AgentSessionScanner;
+          expect(yield* copilotSessionIds).toEqual(["copilot:copilot-a"]);
+
+          yield* writeCopilotSession("copilot-b");
+          expect(yield* copilotSessionIds).toEqual(["copilot:copilot-a"]);
+
+          yield* scanner.refresh(["copilot"]);
+          expect(yield* copilotSessionIds).toEqual(["copilot:copilot-a", "copilot:copilot-b"]);
+        }).pipe(
+          Effect.provide(
+            layerScannerTest({
+              claudeHomePath,
+              codexHomePath,
+              providerInstances: {
+                [ProviderInstanceId.make("copilot")]: {
+                  driver: ProviderDriverKind.make("copilot"),
+                  enabled: true,
+                  environment: [{ name: "COPILOT_HOME", value: copilotHomePath, sensitive: false }],
+                },
+              },
+            }),
+          ),
+        );
+      }),
+    );
+
     it.effect("imports history recorded with a case alias", () =>
       Effect.gen(function* () {
         const path = yield* Path.Path;

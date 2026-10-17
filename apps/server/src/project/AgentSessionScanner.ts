@@ -105,6 +105,18 @@ const TranscriptRecord = Schema.Struct({
       internal_chat_message_metadata_passthrough: Schema.optional(Schema.Unknown),
     }),
   ),
+  // Copilot CLI `events.jsonl` records.
+  agentId: Schema.optional(Schema.String),
+  data: Schema.optional(
+    Schema.Struct({
+      sessionId: Schema.optional(Schema.String),
+      content: Schema.optional(Schema.String),
+      parentToolCallId: Schema.optional(Schema.String),
+      newModel: Schema.optional(Schema.String),
+      title: Schema.optional(Schema.String),
+      context: Schema.optional(Schema.Struct({ cwd: Schema.optional(Schema.String) })),
+    }),
+  ),
 });
 
 const decodeClaudeSettings = Schema.decodeUnknownOption(ClaudeSettings);
@@ -154,14 +166,25 @@ export class AgentSessionScanner extends Context.Service<
   AgentSessionScanner,
   {
     readonly scan: Effect.Effect<AgentSessionScanResult, AgentSessionScanError>;
+    /** Rediscovers the sessions `recentThreads` reads for `sources`. */
+    readonly refresh: (
+      sources: ReadonlyArray<AgentSessionSource>,
+    ) => Effect.Effect<void, AgentSessionScanError>;
     readonly recentThreads: (
       workspaceRoot: string,
       completedSources?: ReadonlyArray<AgentSessionImportSource>,
+      sources?: ReadonlyArray<AgentSessionSource>,
     ) => Stream.Stream<AgentSessionRecentThread, AgentSessionScanError>;
   }
 >()("t3/project/AgentSessionScanner") {}
 
 type AgentSessionSource = AgentSessionProjectCandidate["sources"][number];
+
+const ALL_AGENT_SESSION_SOURCES: ReadonlyArray<AgentSessionSource> = [
+  "claudeAgent",
+  "codex",
+  "copilot",
+];
 
 interface RawCandidate {
   readonly cwd: string;
@@ -263,8 +286,8 @@ function parseAgentSessionRecords(
   records: ReadonlyArray<DecodedTranscriptRecord>,
 ): AgentSessionThread | null {
   const fallbackTimestamp = DateTime.formatIso(DateTime.makeUnsafe(input.lastActiveAtMs));
-  // Claude filenames are session IDs. Codex rollout filenames include extra
-  // timestamp text, so only transcript metadata can provide a resumable ID.
+  // Claude filenames and Copilot session directories are session IDs. Codex rollout
+  // filenames include extra timestamp text, so only transcript metadata can provide one.
   let providerSessionId = input.source === "codex" ? "" : input.fallbackSessionId;
   let title: string | null = null;
   let model: string | null = null;
@@ -355,6 +378,27 @@ function parseAgentSessionRecords(
   let recordIndex = -1;
   for (const record of records) {
     recordIndex += 1;
+    if (input.source === "copilot") {
+      // Sub-agent records and task-tool replies belong to nested runs, not the conversation.
+      if (record.agentId !== undefined || record.data?.parentToolCallId !== undefined) continue;
+      if (record.type === "session.start" && record.data?.sessionId?.trim()) {
+        providerSessionId = record.data.sessionId.trim();
+      } else if (record.type === "session.title_changed" && record.data?.title?.trim()) {
+        title = record.data.title.trim();
+      } else if (record.type === "session.model_change" && record.data?.newModel?.trim()) {
+        model = record.data.newModel.trim();
+      } else if (record.type === "user.message" || record.type === "assistant.message") {
+        const text = record.data?.content?.trim() ?? "";
+        if (text.length === 0) continue;
+        retainMessage({
+          role: record.type === "user.message" ? "user" : "assistant",
+          text,
+          createdAt: normalizeTimestamp(record.timestamp, fallbackTimestamp),
+          codexResponseUser: false,
+        });
+      }
+      continue;
+    }
     if (input.source === "claudeAgent") {
       if (
         record.isSidechain === true ||
@@ -467,7 +511,8 @@ function parseAgentSessionRecords(
 }
 
 function extractDecodedCwd(record: DecodedTranscriptRecord): string | null {
-  const cwd = record.cwd?.trim() || record.payload?.cwd?.trim();
+  const cwd =
+    record.cwd?.trim() || record.payload?.cwd?.trim() || record.data?.context?.cwd?.trim();
   return cwd && cwd.length > 0 ? cwd : null;
 }
 
@@ -476,6 +521,15 @@ function shouldRetainDecodedRecord(
   record: DecodedTranscriptRecord,
 ): boolean {
   if (extractDecodedCwd(record) !== null) return true;
+  if (source === "copilot") {
+    return (
+      record.type === "session.start" ||
+      record.type === "session.title_changed" ||
+      record.type === "session.model_change" ||
+      record.type === "user.message" ||
+      record.type === "assistant.message"
+    );
+  }
   if (source === "claudeAgent") {
     return (
       record.type === "user" ||
@@ -531,6 +585,10 @@ function extractCwd(line: string): string | null {
     if (typeof nested === "string" && nested.trim().length > 0) {
       return nested;
     }
+  }
+  const context = (record.data as { context?: { cwd?: unknown } } | undefined)?.context;
+  if (typeof context?.cwd === "string" && context.cwd.trim().length > 0) {
+    return context.cwd;
   }
   return null;
 }
@@ -957,6 +1015,37 @@ export const make = Effect.gen(function* () {
     },
   );
 
+  const discoverCopilotTranscripts = Effect.fn("AgentSessionScanner.discoverCopilotTranscripts")(
+    function* (homePath: string, providerInstanceId: ProviderInstanceId, operationBudget: number) {
+      const sessionsDir = path.join(homePath, "session-state");
+      let operationsRemaining = operationBudget - 1;
+      let truncated = false;
+      const transcripts: Array<TranscriptCandidate> = [];
+      for (const sessionDirectory of yield* listDirectory(sessionsDir)) {
+        if (operationsRemaining <= 0) {
+          truncated = true;
+          break;
+        }
+        operationsRemaining -= 1;
+        const filePath = path.join(sessionsDir, sessionDirectory, "events.jsonl");
+        const stats = yield* statOption(filePath);
+        if (
+          Option.isSome(stats) &&
+          stats.value.type === "File" &&
+          Option.isSome(stats.value.mtime)
+        ) {
+          transcripts.push({
+            filePath,
+            mtimeMs: stats.value.mtime.value.getTime(),
+            providerInstanceId,
+            size: Number(stats.value.size),
+          });
+        }
+      }
+      return { transcripts, truncated };
+    },
+  );
+
   const groupTranscriptsByCwd = Effect.fn("AgentSessionScanner.groupTranscriptsByCwd")(function* (
     source: AgentSessionSource,
     transcripts: ReadonlyArray<TranscriptCandidate>,
@@ -1000,7 +1089,9 @@ export const make = Effect.gen(function* () {
     }));
   });
 
-  const collectCandidates = Effect.fn("AgentSessionScanner.collectCandidates")(function* () {
+  const collectCandidates = Effect.fn("AgentSessionScanner.collectCandidates")(function* (
+    sources: ReadonlyArray<AgentSessionSource> = ALL_AGENT_SESSION_SOURCES,
+  ) {
     const settings = yield* serverSettings.getSettings.pipe(
       Effect.mapError((cause) => new AgentSessionScanError({ operation: "read-settings", cause })),
     );
@@ -1008,7 +1099,7 @@ export const make = Effect.gen(function* () {
     const raw: Array<RawCandidate> = [];
     let truncated = false;
 
-    for (const source of ["claudeAgent", "codex"] as const) {
+    for (const source of sources) {
       const instances: Array<{
         readonly instanceId: ProviderInstanceId;
         readonly config: ProviderInstanceConfig;
@@ -1038,13 +1129,22 @@ export const make = Effect.gen(function* () {
       const homes: Array<{ homePath: string; providerInstanceId: ProviderInstanceId }> = [];
       const seenHomes = new Set<string>();
       for (const { instanceId, config: instance } of instances) {
-        const homeVariable = source === "claudeAgent" ? "CLAUDE_CONFIG_DIR" : "CODEX_HOME";
+        const homeVariable =
+          source === "claudeAgent"
+            ? "CLAUDE_CONFIG_DIR"
+            : source === "codex"
+              ? "CODEX_HOME"
+              : "COPILOT_HOME";
         const environmentHome =
           instance.environment?.findLast((variable) => variable.name === homeVariable)?.value ??
           hostEnvironment[homeVariable];
 
         let homePath: string;
-        if (source === "claudeAgent") {
+        if (source === "copilot") {
+          homePath = environmentHome?.trim()
+            ? path.resolve(expandHomePath(environmentHome.trim(), homeDir))
+            : path.join(homeDir, ".copilot");
+        } else if (source === "claudeAgent") {
           const config = decodeClaudeSettings(instance.config ?? {});
           if (Option.isNone(config)) continue;
           homePath = resolveClaudeConfigDir(config.value.homePath, environmentHome);
@@ -1082,7 +1182,9 @@ export const make = Effect.gen(function* () {
         }
         const discovered = yield* source === "claudeAgent"
           ? discoverClaudeTranscripts(home.homePath, home.providerInstanceId, operationBudget)
-          : discoverCodexTranscripts(home.homePath, home.providerInstanceId, operationBudget);
+          : source === "codex"
+            ? discoverCodexTranscripts(home.homePath, home.providerInstanceId, operationBudget)
+            : discoverCopilotTranscripts(home.homePath, home.providerInstanceId, operationBudget);
         truncated ||= discovered.truncated;
         transcriptCandidates.push(...discovered.transcripts);
       }
@@ -1108,11 +1210,22 @@ export const make = Effect.gen(function* () {
     return { candidates: raw, truncated };
   });
 
-  let cachedCandidates: ReadonlyArray<RawCandidate> | null = null;
+  const cachedCandidates = new Map<AgentSessionSource, ReadonlyArray<RawCandidate>>();
+  const cacheCandidates = (
+    sources: ReadonlyArray<AgentSessionSource>,
+    candidates: ReadonlyArray<RawCandidate>,
+  ) => {
+    for (const source of sources) {
+      cachedCandidates.set(
+        source,
+        candidates.filter((candidate) => candidate.source === source),
+      );
+    }
+  };
 
   const scan: AgentSessionScanner["Service"]["scan"] = Effect.gen(function* () {
     const { candidates: raw, truncated } = yield* collectCandidates();
-    cachedCandidates = raw;
+    cacheCandidates(ALL_AGENT_SESSION_SOURCES, raw);
 
     const merged = new Map<
       string,
@@ -1234,6 +1347,7 @@ export const make = Effect.gen(function* () {
   const prepareRecentThreads = Effect.fn("AgentSessionScanner.prepareRecentThreads")(function* (
     workspaceRoot: string,
     completedSources: ReadonlyArray<AgentSessionImportSource>,
+    sources: ReadonlyArray<AgentSessionSource>,
   ) {
     const root = path.resolve(expandHomePath(workspaceRoot, homeDir));
     const realRoot = yield* fileSystem.realPath(root).pipe(Effect.orElseSucceed(() => root));
@@ -1242,8 +1356,11 @@ export const make = Effect.gen(function* () {
     const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
     const cutoffMs = nowMs - RECENT_THREAD_WINDOW_MS;
 
-    const candidates = cachedCandidates ?? (yield* collectCandidates()).candidates;
-    cachedCandidates = candidates;
+    const uncachedSources = sources.filter((source) => !cachedCandidates.has(source));
+    if (uncachedSources.length > 0) {
+      cacheCandidates(uncachedSources, (yield* collectCandidates(uncachedSources)).candidates);
+    }
+    const candidates = sources.flatMap((source) => cachedCandidates.get(source) ?? []);
 
     const eligibleTranscripts: Array<{
       readonly candidate: RawCandidate;
@@ -1356,7 +1473,10 @@ export const make = Effect.gen(function* () {
             {
               source: candidate.source,
               providerInstanceId: candidate.providerInstanceId,
-              fallbackSessionId: path.basename(transcript.filePath, ".jsonl"),
+              fallbackSessionId:
+                candidate.source === "copilot"
+                  ? path.basename(path.dirname(transcript.filePath))
+                  : path.basename(transcript.filePath, ".jsonl"),
               lastActiveAtMs: transcript.mtimeMs,
             },
             snapshot.records,
@@ -1391,9 +1511,15 @@ export const make = Effect.gen(function* () {
   const recentThreads: AgentSessionScanner["Service"]["recentThreads"] = (
     workspaceRoot,
     completedSources = [],
-  ) => Stream.unwrap(prepareRecentThreads(workspaceRoot, completedSources));
+    sources = ALL_AGENT_SESSION_SOURCES,
+  ) => Stream.unwrap(prepareRecentThreads(workspaceRoot, completedSources, sources));
 
-  return AgentSessionScanner.of({ scan, recentThreads });
+  const refresh: AgentSessionScanner["Service"]["refresh"] = (sources) =>
+    collectCandidates(sources).pipe(
+      Effect.map(({ candidates }) => cacheCandidates(sources, candidates)),
+    );
+
+  return AgentSessionScanner.of({ scan, refresh, recentThreads });
 });
 
 export const layer = Layer.effect(AgentSessionScanner, make);
