@@ -21,3 +21,6 @@ Both use the same CLI install and sign-in, so you can add either or both and pic
 - Slash commands that only print text, such as `/skills`, reply in the thread without starting a
   model turn.
 - Rewinding a thread restores files but does not rewind Copilot's conversation.
+- While **GitHub Copilot (SDK)** is enabled, Copilot CLI sessions from the last 30 days appear
+  as threads in the project for their folder within a few minutes, so you can continue a session
+  started in the terminal or VS Code. Only projects you have already added receive sessions.
