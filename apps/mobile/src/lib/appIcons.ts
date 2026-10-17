@@ -1,5 +1,3 @@
-import type { ImageSourcePropType } from "react-native";
-
 export type AppIconGroup = "light" | "dark";
 
 export interface AppIconOption {
@@ -11,7 +9,8 @@ export interface AppIconOption {
   readonly key: string | null;
   readonly label: string;
   readonly group: AppIconGroup;
-  readonly thumbnail: ImageSourcePropType;
+  /** A bundled asset (`require` result). */
+  readonly thumbnail: number;
 }
 
 /**

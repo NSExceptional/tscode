@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { Pressable, View } from "react-native";
 import { Image } from "expo-image";
 
-import { AppText as Text } from "../../../../components/AppText";
+import { AppText as Text } from "../../../../components/ui/AppText";
 import { APP_ICON_OPTIONS, type AppIconGroup, type AppIconOption } from "../../../../lib/appIcons";
 import {
   appIconsSupported,
@@ -58,7 +58,7 @@ function AppIconGroupCard(props: {
 }) {
   const options = APP_ICON_OPTIONS.filter((option) => option.group === props.group);
   return (
-    <SettingsSection card title={props.title}>
+    <SettingsSection title={props.title}>
       <View className="flex-row flex-wrap px-2 py-1">
         {options.map((option) => (
           <AppIconTile

@@ -1,0 +1,23 @@
+# GitHub Copilot
+
+GitHub Copilot is available two ways:
+
+- **GitHub Copilot (SDK)** drives the `copilot` CLI through GitHub's Copilot SDK. It shows each
+  model's reasoning-effort and long-context options, Copilot's slash commands and skills, and plan
+  mode proposals.
+- **GitHub Copilot** through the [ACP Registry](./providers-acp.md) runs `copilot --acp`.
+
+Both use the same CLI install and sign-in, so you can add either or both and pick per thread.
+
+## Set up
+
+1. Install the [GitHub Copilot CLI](https://github.com/github/copilot-cli) on the server and run
+   `copilot` once to sign in with `/login`.
+2. Open **Settings → Providers**, select **Add provider**, and choose **GitHub Copilot (SDK)**.
+3. If T3 Code cannot find `copilot`, set its **Binary path**.
+
+## Notes
+
+- Slash commands that only print text, such as `/skills`, reply in the thread without starting a
+  model turn.
+- Rewinding a thread restores files but does not rewind Copilot's conversation.

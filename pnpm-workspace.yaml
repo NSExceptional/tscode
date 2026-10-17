@@ -15,6 +15,8 @@ allowBuilds:
   electron: true
   electron-winstaller: false
   esbuild: true
+  # Only @github/copilot-sdk's in-process FFI transport needs it; we use stdio.
+  koffi: false
   msgpackr-extract: true
   msw: false
   node-pty: true

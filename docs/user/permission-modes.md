@@ -25,8 +25,8 @@ Providers enforce permissions differently. Some read-only actions can proceed in
 including OpenCode and Antigravity, fall back to asking. On Grok, commands its review blocks come
 to you for approval.
 
-Muse Code offers only **Supervised** and **Full access**. A Muse thread already set to another mode
-runs in **Supervised**.
+Muse Code and GitHub Copilot (SDK) offer only **Supervised** and **Full access**. A thread already
+set to another mode runs in **Supervised**.
 
 Grok offers no **Auto-accept edits**. A Grok thread already set to it runs in **Supervised**. Grok
 file-change approvals offer **Allow all edits this session**. Its command approvals have no
