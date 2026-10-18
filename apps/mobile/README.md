@@ -66,12 +66,12 @@ After changing a native dependency patch, rerun CocoaPods before rebuilding an e
 project. pnpm gives each patch hash a new package path; Pods can otherwise keep compiling the
 previous directory.
 
-If your Xcode account only has a Personal Team, use a bundle identifier you control and opt into the
-reduced-capability local build. Personal Team builds omit the widget and share extensions, push
-entitlement, and native Sign in with Apple entitlement; builds without this opt-in are unchanged.
+The TS Code fork builds iOS with the reduced capability set by default: no widget or share
+extensions, App Groups, Live Activities, or native Sign in with Apple. Set
+`T3CODE_IOS_PERSONAL_TEAM=0` to build the full upstream capability set. To sign with a Personal
+Team, also set a bundle identifier you control:
 
 ```bash
-T3CODE_IOS_PERSONAL_TEAM=1 \
 T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID=com.example.t3code.dev \
 vp run ios:dev
 ```
@@ -85,7 +85,6 @@ vp run ios:release
 The Personal Team equivalent also needs a unique bundle identifier:
 
 ```bash
-T3CODE_IOS_PERSONAL_TEAM=1 \
 T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID=com.example.t3code \
 vp run ios:release
 ```
