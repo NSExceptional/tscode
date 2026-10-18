@@ -62,6 +62,8 @@ import * as TextGeneration from "./textGeneration/TextGeneration.ts";
 import * as ProviderInstanceRegistryHydration from "./provider/ProviderInstanceRegistryHydration.ts";
 import * as ProjectSettingsOverrideSweep from "./provider/ProjectSettingsOverrideSweep.ts";
 import * as CopilotSessionMirror from "./project/CopilotSessionMirror.ts";
+import * as CopilotSettleSync from "./project/CopilotSettleSync.ts";
+import * as CopilotTranscriptSync from "./project/CopilotTranscriptSync.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import * as McpHttpServer from "./mcp/McpHttpServer.ts";
 import * as McpSessionRegistry from "./mcp/McpSessionRegistry.ts";
@@ -579,6 +581,8 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   ReplayMarkers.layer,
   Layer.effectDiscard(ProjectSettingsOverrideSweep.sweep),
   CopilotSessionMirror.layer,
+  CopilotTranscriptSync.layer.pipe(Layer.provide(RuntimeLayer.layerEventSink)),
+  CopilotSettleSync.layer,
 ).pipe(
   Layer.provideMerge(layerOrchestrationApplication),
   Layer.provideMerge(RuntimeLayer.layerEventInfrastructure),

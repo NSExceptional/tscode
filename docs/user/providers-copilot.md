@@ -24,3 +24,8 @@ Both use the same CLI install and sign-in, so you can add either or both and pic
 - While **GitHub Copilot (SDK)** is enabled, Copilot CLI sessions from the last 30 days appear
   as threads in the project for their folder within a few minutes, so you can continue a session
   started in the terminal or VS Code. Only projects you have already added receive sessions.
+- When you continue a Copilot thread's session in the terminal or VS Code, those messages appear in
+  the thread a few minutes after that client goes quiet. Tool activity is not copied.
+- **Sync settled with VS Code** (in the provider's settings) settles a thread when you mark its
+  session done in VS Code, and marks the session done when you settle the thread. VS Code shows the
+  change the next time it opens that folder. Neither side is ever unsettled or un-done for you.

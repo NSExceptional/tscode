@@ -27,9 +27,18 @@ export const CopilotSettings = makeProviderSettingsSchema(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
+    settleSyncWithVsCode: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(false)),
+      Schema.annotateKey({
+        title: "Sync settled with VS Code",
+        description:
+          "Settle a thread when its session is marked done in VS Code, and mark the session done when you settle it here. Experimental: VS Code only picks up changes when it next opens the folder.",
+        providerSettingsForm: { control: "switch" },
+      }),
+    ),
   },
   {
-    order: ["binaryPath"],
+    order: ["binaryPath", "settleSyncWithVsCode"],
   },
 );
 export type CopilotSettings = typeof CopilotSettings.Type;

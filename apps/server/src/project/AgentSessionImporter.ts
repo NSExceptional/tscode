@@ -86,13 +86,14 @@ function dateTime(value: string): DateTime.Utc {
   return DateTime.makeUnsafe(value);
 }
 
-function messageEvents(input: {
+export function importedMessageEvents(input: {
   readonly threadId: ThreadId;
-  readonly index: number;
+  /** Unique within the thread; part of every derived id. */
+  readonly suffix: string;
+  readonly ordinal: number;
   readonly message: AgentSessionScanner.AgentSessionThreadMessage;
 }): ReadonlyArray<OrchestrationV2DomainEvent> {
-  const ordinal = input.index + 1;
-  const suffix = String(input.index).padStart(6, "0");
+  const { ordinal, suffix } = input;
   const messageId = MessageId.make(`${input.threadId}:${suffix}`);
   const turnItemId = TurnItemId.make(
     `${IMPORT_EVENT_PREFIX}:turn-item:${input.threadId}:${suffix}`,
@@ -370,7 +371,12 @@ const make = Effect.gen(function* () {
                 payload: appThread,
               },
               ...thread.messages.flatMap((message, index) =>
-                messageEvents({ threadId, index, message }),
+                importedMessageEvents({
+                  threadId,
+                  suffix: String(index).padStart(6, "0"),
+                  ordinal: index + 1,
+                  message,
+                }),
               ),
               {
                 id: EventId.make(`${IMPORT_EVENT_PREFIX}:provider-thread:${providerThreadId}`),
