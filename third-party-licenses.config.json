@@ -151,6 +151,11 @@
   ],
   "packageOverrides": [
     {
+      "name": "expo-dynamic-app-icon",
+      "version": "1.2.0",
+      "generatedNotice": { "licenseId": "MIT", "copyrights": ["Copyright Junseo Oh"] }
+    },
+    {
       "name": "@github/copilot-sdk",
       "version": "1.0.22",
       "generatedNotice": { "licenseId": "MIT", "copyrights": ["Copyright GitHub, Inc."] }
