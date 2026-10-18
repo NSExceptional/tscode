@@ -151,6 +151,41 @@
   ],
   "packageOverrides": [
     {
+      "name": "@github/copilot-sdk",
+      "version": "1.0.22",
+      "generatedNotice": { "licenseId": "MIT", "copyrights": ["Copyright GitHub, Inc."] }
+    },
+    {
+      "name": "@github/copilot-sdk-darwin-arm64",
+      "version": "1.0.22",
+      "generatedNotice": { "licenseId": "MIT", "copyrights": ["Copyright GitHub, Inc."] }
+    },
+    {
+      "name": "@github/copilot-sdk-darwin-x64",
+      "version": "1.0.22",
+      "generatedNotice": { "licenseId": "MIT", "copyrights": ["Copyright GitHub, Inc."] }
+    },
+    {
+      "name": "@github/copilot-sdk-linux-arm64",
+      "version": "1.0.22",
+      "generatedNotice": { "licenseId": "MIT", "copyrights": ["Copyright GitHub, Inc."] }
+    },
+    {
+      "name": "@github/copilot-sdk-linux-x64",
+      "version": "1.0.22",
+      "generatedNotice": { "licenseId": "MIT", "copyrights": ["Copyright GitHub, Inc."] }
+    },
+    {
+      "name": "@github/copilot-sdk-linuxmusl-arm64",
+      "version": "1.0.22",
+      "generatedNotice": { "licenseId": "MIT", "copyrights": ["Copyright GitHub, Inc."] }
+    },
+    {
+      "name": "@github/copilot-sdk-linuxmusl-x64",
+      "version": "1.0.22",
+      "generatedNotice": { "licenseId": "MIT", "copyrights": ["Copyright GitHub, Inc."] }
+    },
+    {
       "name": "@bufbuild/protobuf",
       "version": "1.10.0",
       "generatedNotices": [
